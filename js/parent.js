@@ -222,5 +222,126 @@ const ParentPanel = (() => {
     }
   });
 
-  return { open, close };
+  // ---------------------------------------------------------------------
+  // Guided pass: record all 30 words in one sitting. Same storage and same
+  // precedence as the per-word buttons — this is only a nicer way in, because
+  // her own voice is the point of the app and doing it thirty times through a
+  // scrolling list is a chore.
+  // ---------------------------------------------------------------------
+
+  const RA = {
+    panel: document.getElementById('record-all-panel'),
+    emoji: document.getElementById('ra-emoji'),
+    word: document.getElementById('ra-word'),
+    sub: document.getElementById('ra-sub'),
+    counter: document.getElementById('ra-counter'),
+    status: document.getElementById('ra-status'),
+    recordBtn: document.getElementById('ra-record'),
+    playBtn: document.getElementById('ra-play'),
+    skipBtn: document.getElementById('ra-skip'),
+    exitBtn: document.getElementById('ra-exit'),
+  };
+
+  const LANG = SPOKEN_LANGS[0];
+  let raIndex = 0;
+  let raRecorder = null;
+  let raStopTimer = null;
+
+  async function raRender() {
+    const w = WORDS[raIndex];
+    RA.emoji.textContent = w.emoji;
+    RA.word.textContent = w[LANG];
+    RA.sub.textContent = LANG === 'target' ? w.home : w.target;
+    RA.counter.textContent = `${raIndex + 1} / ${WORDS.length}`;
+    const src = await Audio2.sourceFor(w.id, LANG);
+    RA.status.textContent = src === 'recording' ? '✓ já gravada com a sua voz' : '';
+  }
+
+  function raOpen() {
+    raIndex = 0;
+    RA.panel.classList.remove('hidden');
+    raRender();
+  }
+
+  function raClose() {
+    raStopRecording();
+    Speech.releaseMic();
+    Audio2.stopAll();
+    RA.panel.classList.add('hidden');
+    build(); // reflect anything just recorded in the list behind
+  }
+
+  function raAdvance() {
+    if (raIndex >= WORDS.length - 1) {
+      raClose();
+      return;
+    }
+    raIndex += 1;
+    raRender();
+  }
+
+  function raStopRecording() {
+    clearTimeout(raStopTimer);
+    if (raRecorder && raRecorder.state !== 'inactive') raRecorder.stop();
+  }
+
+  async function raToggleRecord() {
+    if (raRecorder) {
+      raStopRecording();
+      return;
+    }
+
+    const w = WORDS[raIndex];
+    const stream = await Speech.acquireMic();
+    if (!stream) {
+      RA.status.textContent = 'Sem acesso ao microfone.';
+      return;
+    }
+    const mimeType = pickMimeType();
+    if (mimeType === null) {
+      RA.status.textContent = 'Este aparelho não permite gravar áudio.';
+      return;
+    }
+
+    let recorder;
+    try {
+      recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    } catch {
+      RA.status.textContent = 'Não foi possível iniciar a gravação.';
+      return;
+    }
+
+    const chunks = [];
+    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+    recorder.onstop = async () => {
+      raRecorder = null;
+      RA.recordBtn.classList.remove('recording');
+      RA.recordBtn.textContent = '●';
+      const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/mp4' });
+      if (blob.size > 0) {
+        await Storage.saveRecording(w.id, LANG, blob);
+        Audio2.invalidateCache(w.id, LANG);
+        recordedKeys.add(`${w.id}:${LANG}`);
+        RA.status.textContent = '✓ gravada';
+        setTimeout(raAdvance, 500); // straight on to the next word
+      } else {
+        RA.status.textContent = 'Não gravou nada — tente de novo.';
+      }
+    };
+
+    raRecorder = recorder;
+    RA.recordBtn.classList.add('recording');
+    RA.recordBtn.textContent = '■';
+    RA.status.textContent = 'Gravando… toque para parar';
+    recorder.start();
+    raStopTimer = setTimeout(raStopRecording, 5000);
+  }
+
+  RA.recordBtn.addEventListener('click', raToggleRecord);
+  RA.playBtn.addEventListener('click', () => Audio2.playWord(WORDS[raIndex], LANG));
+  RA.skipBtn.addEventListener('click', () => { raStopRecording(); raAdvance(); });
+  RA.exitBtn.addEventListener('click', raClose);
+  document.getElementById('record-all').addEventListener('click', raOpen);
+
+  return { open, close, openRecordAll: raOpen };
 })();

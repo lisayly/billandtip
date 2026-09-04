@@ -1,13 +1,38 @@
-// End-to-end smoke test. Needs playwright + a static server on :8899:
-//   npx http-server -p 8899 -c-1 .   &&   node test/smoke.js
+// End-to-end smoke test:  node test/smoke.js
+// Serves the app itself, so there's nothing to start first.
 let chromium;
 try {
   ({ chromium } = require('playwright'));
 } catch {
   ({ chromium } = require('/opt/node22/lib/node_modules/playwright'));
 }
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
 
-const URL = 'http://127.0.0.1:8899/index.html';
+const ROOT = path.join(__dirname, '..');
+const TYPES = {
+  '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
+  '.json': 'application/json', '.png': 'image/png', '.mp3': 'audio/mpeg',
+  '.m4a': 'audio/mp4', '.txt': 'text/plain',
+};
+
+const server = http.createServer((req, res) => {
+  const rel = decodeURIComponent(req.url.split('?')[0]).replace(/^\/+/, '') || 'index.html';
+  const file = path.join(ROOT, rel);
+  // don't serve anything outside the project
+  if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+    res.writeHead(404); res.end('not found'); return;
+  }
+  res.writeHead(200, {
+    'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream',
+    'Cache-Control': 'no-store',
+    'Service-Worker-Allowed': '/',
+  });
+  fs.createReadStream(file).pipe(res);
+});
+
+let URL; // set once the server has a port (0 = let the OS pick a free one)
 const results = [];
 function check(name, ok, extra = '') {
   results.push({ name, ok, extra });
@@ -15,6 +40,9 @@ function check(name, ok, extra = '') {
 }
 
 (async () => {
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  URL = `http://127.0.0.1:${server.address().port}/index.html`;
+
   const browser = await chromium.launch({
     args: [
       '--use-fake-ui-for-media-stream',
@@ -56,6 +84,7 @@ function check(name, ok, extra = '') {
     uniqueEmoji: new Set(WORDS.map(w => w.emoji)).size,
     missing: WORDS.filter(w => !w.home || !w.target || !w.emoji).length,
   }));
+  const WORDS_EN = await page.evaluate(() => WORDS.map(w => w[SPOKEN_LANGS[0]]));
   check('30 objects, unique ids/pictures',
     wordCheck.count === 30 && wordCheck.uniqueIds === 30 && wordCheck.uniqueEmoji === 30 && wordCheck.missing === 0,
     JSON.stringify(wordCheck));
@@ -172,6 +201,55 @@ function check(name, ok, extra = '') {
   check('falls back to speech synthesis when not recorded',
     fallback.usedSynthesis === fallback.expected, JSON.stringify(fallback));
 
+  // 11b. guided pass: record every word in one sitting, auto-advancing.
+  // Her own voice is the point of the app, so this path gets real coverage.
+  const guided = await page.evaluate(async () => {
+    const out = {};
+    document.getElementById('record-all').click();
+    out.opened = !document.getElementById('record-all-panel').classList.contains('hidden');
+    out.firstWord = document.getElementById('ra-word').textContent;
+    out.counter = document.getElementById('ra-counter').textContent;
+
+    // record the word being shown
+    const btn = document.getElementById('ra-record');
+    btn.click();
+    await new Promise(r => setTimeout(r, 800));
+    out.showsRecording = btn.classList.contains('recording');
+    btn.click();
+    await new Promise(r => setTimeout(r, 1200));
+
+    out.saved = !!(await Storage.getRecording(WORDS[0].id, SPOKEN_LANGS[0]));
+    out.advanced = document.getElementById('ra-word').textContent;   // moved on by itself
+    out.counterAfter = document.getElementById('ra-counter').textContent;
+
+    // skip leaves the current word untouched but still moves on
+    document.getElementById('ra-skip').click();
+    await new Promise(r => setTimeout(r, 100));
+    out.afterSkip = document.getElementById('ra-word').textContent;
+    out.skippedSaved = !!(await Storage.getRecording(WORDS[1].id, SPOKEN_LANGS[0]));
+
+    document.getElementById('ra-exit').click();
+    out.closed = document.getElementById('record-all-panel').classList.contains('hidden');
+    return out;
+  });
+  check('guided pass records a word and moves to the next by itself',
+    guided.opened && guided.showsRecording && guided.saved &&
+    guided.firstWord === WORDS_EN[0] && guided.advanced === WORDS_EN[1] &&
+    guided.counter === '1 / 30' && guided.counterAfter === '2 / 30',
+    JSON.stringify(guided));
+  check('guided pass: skip advances without recording, exit closes',
+    guided.afterSkip === WORDS_EN[2] && guided.skippedSaved === false && guided.closed,
+    JSON.stringify({ afterSkip: guided.afterSkip, skippedSaved: guided.skippedSaved, closed: guided.closed }));
+
+  // the guided pass must not leave the mic running afterwards
+  const guidedMic = await page.evaluate(async () => {
+    const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const live = s.getAudioTracks().filter(t => t.readyState === 'live').length;
+    s.getTracks().forEach(t => t.stop());
+    return live;
+  });
+  check('guided pass releases the microphone on exit', guidedMic === 1, `mic re-acquirable: ${guidedMic === 1}`);
+
   // 12. offline: service worker caches the app
   await page.click('#parent-close');
   const swReady = await page.evaluate(async () => {
@@ -212,7 +290,8 @@ function check(name, ok, extra = '') {
   // 15. no external network requests at all
   const externalReqs = [];
   const p3 = await context.newPage();
-  p3.on('request', (r) => { if (!r.url().startsWith('http://127.0.0.1:8899') && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) externalReqs.push(r.url()); });
+  const ORIGIN = URL.slice(0, URL.lastIndexOf('/'));
+  p3.on('request', (r) => { if (!r.url().startsWith(ORIGIN) && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) externalReqs.push(r.url()); });
   await p3.goto(URL, { waitUntil: 'networkidle' });
   check('makes zero external requests', externalReqs.length === 0, externalReqs.join(', '));
 
@@ -377,6 +456,7 @@ function check(name, ok, extra = '') {
   check('no console errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 
   await browser.close();
+  server.close();
 
   const failed = results.filter(r => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`);

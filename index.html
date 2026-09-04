@@ -41,12 +41,39 @@
         automaticamente. Toque para gravar (●), ouvir (▶) ou apagar (✕).
       </p>
 
+      <button id="record-all" class="pbtn pbtn-record-all">
+        🎙️ Gravar todas as palavras com a sua voz
+      </button>
+
       <div class="parent-status" id="mic-status"></div>
 
       <div id="word-list" class="word-list"></div>
 
       <div class="parent-footer">
         <button id="reset-progress" class="pbtn pbtn-danger">Reiniciar progresso</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Guided pass: record the whole set in one sitting, one word at a time. -->
+  <div id="record-all-panel" class="hidden">
+    <div class="ra-top">
+      <span id="ra-counter" class="ra-counter"></span>
+      <button id="ra-exit" class="pbtn">Sair</button>
+    </div>
+
+    <div class="ra-middle">
+      <div id="ra-emoji" class="ra-emoji"></div>
+      <div id="ra-word" class="ra-word"></div>
+      <div id="ra-sub" class="ra-sub"></div>
+    </div>
+
+    <div class="ra-bottom">
+      <div id="ra-status" class="ra-status"></div>
+      <button id="ra-record" class="ra-record">●</button>
+      <div class="ra-actions">
+        <button id="ra-play" class="pbtn pbtn-play">▶ Ouvir</button>
+        <button id="ra-skip" class="pbtn">Pular ›</button>
       </div>
     </div>
   </div>

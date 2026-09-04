@@ -243,3 +243,88 @@ html, body {
   display: flex;
   justify-content: center;
 }
+
+/* ---------- guided "record every word" pass (parent only) ---------- */
+
+.pbtn-record-all {
+  width: 100%;
+  background: #eb3b5a;
+  padding: 14px;
+  font-size: 15px;
+  margin-bottom: 14px;
+}
+
+#record-all-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: #16181d;
+  color: #f2f2f2;
+  display: flex;
+  flex-direction: column;
+  padding: calc(14px + env(safe-area-inset-top, 0px))
+           calc(16px + env(safe-area-inset-right, 0px))
+           calc(24px + env(safe-area-inset-bottom, 0px))
+           calc(16px + env(safe-area-inset-left, 0px));
+}
+#record-all-panel.hidden { display: none; }
+
+.ra-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ra-counter {
+  font-size: 14px;
+  color: #8a90a0;
+  font-variant-numeric: tabular-nums;
+}
+
+.ra-middle {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.ra-emoji { font-size: min(34vw, 22vh); line-height: 1; }
+.ra-word  { font-size: 34px; font-weight: 700; }
+.ra-sub   { font-size: 15px; color: #8a90a0; }
+
+.ra-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.ra-status {
+  font-size: 14px;
+  color: #f7b731;
+  min-height: 20px;
+  text-align: center;
+}
+
+.ra-record {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  border: none;
+  background: #eb3b5a;
+  color: #fff;
+  font-size: 34px;
+  line-height: 1;
+}
+.ra-record.recording {
+  background: #f7b731;
+  color: #222;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.ra-actions {
+  display: flex;
+  gap: 10px;
+}

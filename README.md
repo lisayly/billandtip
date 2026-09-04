@@ -40,12 +40,24 @@ she's saying it back reliably; amber means she's still working on it.
 
 ### Recording your own voice
 
-In parent mode each word has one row — 🇬🇧 English, the language she hears — with
-● record, ▶ play, ✕ delete. The Portuguese word is shown in the heading so you
-can find the object quickly; it is never played to her.
+Her voice is what the app reaches for first, for every word. There are two ways
+to put it there.
 
-Tap ● , say the word, tap ■ to stop. That's it; it's saved on the phone.
-Recording stops on its own after 5 seconds if you forget.
+**The whole set in one sitting** — the red button at the top of parent mode,
+*Gravar todas as palavras com a sua voz*. It shows one word at a time with its
+picture: tap the big button, say the word, tap to stop, and it saves and moves
+to the next one by itself. *Pular* skips a word, *Ouvir* plays back what's there
+now, *Sair* leaves — everything recorded so far is kept. Words you've already
+done are marked "✓ já gravada", so you can start, stop, and come back later.
+
+**One word at a time** — each word in the list below has ● record, ▶ play,
+✕ delete. Good for redoing a single word that didn't come out well.
+
+Either way: tap ●, say the word, tap ■ to stop. It's saved straight onto the
+phone. Recording stops on its own after 5 seconds if you forget.
+
+Each word shows one row — 🇬🇧 English, the language she hears. The Portuguese word
+is shown alongside so you can find the object quickly; it is never played to her.
 
 **Anything you don't record is spoken by the phone's built-in synthetic voice
 automatically.** So record the words you're happy saying in English and leave the
@@ -143,14 +155,13 @@ It drives everything at once — what's played, what counts as saying it back
 correctly, and which rows parent mode offers to record. `HOME_LANG` and
 `TARGET_LANG` set the two speech-synthesis voices.
 
-If you edit any file, bump `CACHE` in `sw.js` (`palavras-v2` → `-v3`) so the
+If you edit any file, bump `CACHE` in `sw.js` (`palavras-v3` → `-v4`) so the
 iPhone picks up the new version instead of the cached old one.
 
 ## Running and testing it locally
 
 ```bash
-npm start          # serves on http://localhost:8899
-npm test           # 31 end-to-end checks in a real browser
+npm test           # 34 end-to-end checks in a real browser
 ```
 
 The suite covers the things that actually matter here: that the child-facing
