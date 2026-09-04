@@ -2,9 +2,11 @@
 
 A voice-only word app for a 1-year-old who can't read yet.
 
-One big picture on the screen. She taps it, hears the word in Portuguese and
-then in English, and the app listens while she says it back. No text, no menus,
-no scores, no stars, no timers. Nothing to read and nothing to win.
+One big picture on the screen. She taps it, hears the word **in English**, and
+the app listens while she says it back. No text, no menus, no scores, no stars,
+no timers. Nothing to read and nothing to win.
+
+Built for **iPhone/iPad** — it installs to the home screen and runs offline.
 
 It runs entirely on the phone with no connection, and makes zero network
 requests of any kind — nothing about her ever leaves the device.
@@ -13,7 +15,7 @@ requests of any kind — nothing about her ever leaves the device.
 
 ## How it works for her
 
-- **Tap the picture** → hears the word (`bola`, then `ball`).
+- **Tap the picture** → hears the word (`ball`).
 - **A soft halo pulses** → that's the only "your turn" cue. She says it back.
 - **She gets it** → a little rising chime.
 - **She misses** → a gentle, non-punishing two-note sound, then the word is
@@ -38,48 +40,56 @@ she's saying it back reliably; amber means she's still working on it.
 
 ### Recording your own voice
 
-In parent mode, each word has two rows — 🇧🇷 Portuguese and 🇬🇧 English — and each
-row has ● record, ▶ play, ✕ delete.
+In parent mode each word has one row — 🇬🇧 English, the language she hears — with
+● record, ▶ play, ✕ delete. The Portuguese word is shown in the heading so you
+can find the object quickly; it is never played to her.
 
 Tap ● , say the word, tap ■ to stop. That's it; it's saved on the phone.
 Recording stops on its own after 5 seconds if you forget.
 
 **Anything you don't record is spoken by the phone's built-in synthetic voice
-automatically.** So you can record the Portuguese words in your own voice and
-leave English to the synthesiser, or record whichever words you like in either
-language, in any order. It always prefers, in this order:
+automatically.** So record the words you're happy saying in English and leave the
+rest to the synthesiser, in any order you like. It always prefers, in this order:
 
 1. your recording, then
 2. a voice file bundled with the app (see `audio/README.txt` — useful if you'd
-   rather record 60 words at a computer than on the phone), then
+   rather record the 30 words at a computer than on the phone), then
 3. speech synthesis.
 
-## Installing it on the Samsung
+## Installing it on the iPhone
 
-There's no build step and no app store. It's a web app that installs to the
-home screen and then runs offline like any other app.
+There's no build step and no App Store. It's a web app that installs to the home
+screen and then runs offline like any other app.
 
 1. Put these files anywhere that serves them over `https` — GitHub Pages is the
    easiest: repo **Settings → Pages → Deploy from branch**, pick this branch,
    and you get a URL a minute later.
-2. On the Samsung, open that URL in **Chrome** (Samsung Internet works too).
-3. Menu **⋮ → Add to Home screen**.
-4. Open it from the home-screen icon from then on — it launches fullscreen with
-   no address bar for her to poke at.
-5. Say yes to the microphone prompt the first time.
-6. **Then turn the wifi off and open it again** to confirm it works offline. It
-   should behave identically.
+2. On the iPhone, open that URL **in Safari**. It has to be Safari — Chrome on
+   iOS can't install to the home screen.
+3. **Share button (□↑) → Add to Home Screen → Add.**
+4. Open it from the home-screen icon from then on. Launched that way it runs
+   fullscreen with no Safari bars, and its storage is exempt from the 7-day
+   clear-out Safari applies to ordinary websites — which matters, because your
+   recordings live in it.
+5. Tap the picture once and say yes to the microphone prompt.
+6. **Then turn on Airplane Mode and open it again** to confirm it works offline.
+   It should behave identically.
 
-The `https` bit is not optional — microphone access and offline caching are both
+The `https` bit is not optional — the microphone and offline caching are both
 blocked on plain `http`. Anything on `localhost` or a real `https` host is fine.
 
-### Keeping the screen on and her inside the app
+### Two iPhone settings worth knowing
 
-The app requests a screen wake-lock so it doesn't sleep mid-play. To stop her
-escaping into the rest of the phone, turn on Android's **Screen pinning**
-(Settings → Security → Advanced → Screen pinning), then pin the app from the
-recents view. That's a system feature and far more reliable than anything a web
-app can do by itself.
+- **The ring/silent switch.** The app asks iOS to play anyway (iOS 16.4+), so it
+  should be audible even on silent. On an older iPad or iPhone, flip the switch
+  off silent if you hear nothing.
+- **Guided Access** keeps her inside the app — she can't swipe out to the rest of
+  the phone. Settings → Accessibility → Guided Access, turn it on and set a
+  passcode; then triple-click the side button once the app is open. Triple-click
+  again to leave. This is much more reliable than anything a web app can do
+  itself, and it also disables the hardware buttons.
+
+The app also asks iOS to keep the screen awake while she's playing (iOS 16.4+).
 
 ---
 
@@ -88,25 +98,27 @@ app can do by itself.
 Telling *whether she said the right word* needs speech recognition, and this is
 where the offline requirement bites:
 
-- **Offline (the normal case):** the browser's speech recognizer is unavailable
-  — Chrome's implementation always calls Google's servers, and Android's offline
-  dictation packs don't back it. So offline the app listens with on-device
+- **Offline (the normal case):** the browser's speech recognizer isn't usable.
+  Safari's implementation goes out to Apple's servers, and the on-device
+  dictation iOS uses for keyboard voice input isn't exposed to web pages.
+  (Safari also wants recognition to start from a tap, which ours can't, since it
+  follows the word playing.) So offline the app listens with on-device
   voice-activity detection: it can hear **that** she said something, but not
   **which** word. In that mode every attempt gets warm, neutral encouragement
   and is logged as "practised" — **it never tells her she's wrong when it
   couldn't actually check.** That was a deliberate call: a 1-year-old shouldn't
   be corrected by a guess.
-- **When there is wifi:** the app quietly uses real recognition instead, matches
-  her attempt generously in *either* language (`bola` or `ball` both count, and
-  approximations like "bo" pass), and that's when the right/wrong tracking and
-  the repetition weighting get real data. If the recognizer fails mid-session it
-  falls back to the offline behaviour rather than scoring her wrong.
+- **When there is wifi:** the app quietly tries real recognition instead, matches
+  her attempt generously (`ball`, and approximations like "bal", both pass), and
+  that's when the right/wrong tracking and the repetition weighting get real
+  data. If the recognizer fails it falls back to the offline behaviour rather
+  than scoring her wrong.
 
 In practice: leave it offline for everyday play, and it'll pick up her real
 progress on any day the wifi happens to be on. If you ever want true offline
-word-level recognition, that needs an on-device model (Vosk has a ~50 MB
-Portuguese one) — a much bigger build, and worth doing only if the wifi-day
-tracking turns out not to be enough.
+word-level recognition, that needs an on-device model bundled into a real native
+app — a much bigger build, and worth doing only if the wifi-day tracking turns
+out not to be enough.
 
 Also worth knowing: at 1, speech recognisers are unreliable on toddler speech no
 matter who builds them. The matching here is deliberately generous for that
@@ -114,26 +126,50 @@ reason — the app is built to encourage imitation, not to grade pronunciation.
 
 ---
 
-## Changing the words
+## Changing the words, or the language she hears
 
 `js/words.js` — 30 entries, each with an id, the picture (an emoji, so there are
 no image files to manage and nothing to download), and the word in both
-languages. Change the words, the pictures, or the languages there; `HOME_LANG`
-and `TARGET_LANG` at the top set the two speech-synthesis voices.
+languages.
 
-If you edit any file, bump `CACHE` in `sw.js` (`palavras-v1` → `-v2`) so the
-phones pick up the new version instead of the cached old one.
+One line at the top of that file controls what she hears:
+
+```js
+const SPOKEN_LANGS = ['target'];           // English only  (current setting)
+const SPOKEN_LANGS = ['home', 'target'];   // Portuguese first, then English
+```
+
+It drives everything at once — what's played, what counts as saying it back
+correctly, and which rows parent mode offers to record. `HOME_LANG` and
+`TARGET_LANG` set the two speech-synthesis voices.
+
+If you edit any file, bump `CACHE` in `sw.js` (`palavras-v2` → `-v3`) so the
+iPhone picks up the new version instead of the cached old one.
 
 ## Running and testing it locally
 
 ```bash
 npm start          # serves on http://localhost:8899
-npm test           # 24 end-to-end checks in a real browser
+npm test           # 31 end-to-end checks in a real browser
 ```
 
-The test suite covers the things that actually matter here: that the child-facing
-screen has no text on it, that a tap plays both languages and then listens, that
-misses resurface early in the rotation and correct answers sink, that progress
-survives a restart, that a short press doesn't open parent mode but a long one
-does, that recording your voice overrides synthesis, that the app fully loads
-with the network cut, and that a failing recognizer never reads as a wrong answer.
+The suite covers the things that actually matter here: that the child-facing
+screen has no text on it, that a tap plays the English word and then listens,
+that misses resurface early in the rotation and correct answers sink, that
+progress survives a restart, that a short press doesn't open parent mode but a
+long one does, that recording your voice overrides synthesis, that the app fully
+loads with the network cut, and that a failing recognizer never reads as a wrong
+answer.
+
+The iOS-specific ones cover the rules Safari enforces: that audio is unlocked
+synchronously inside the tap (get this wrong and the app is silent on iPhone,
+with no error anywhere), that one unlocked `<audio>` element is reused rather
+than one per word, that the audio session flips to `play-and-record` only while
+listening, that the microphone is handed back after every turn, and that the
+home-screen icon and fullscreen meta tags are really in place.
+
+**Not verified on real Safari.** This sandbox couldn't download WebKit, so the
+suite runs in Chromium and checks the logic the Safari fixes depend on rather
+than Safari itself. The first run on the actual iPhone is the real test — watch
+for whether you hear the word on the very first tap, and whether it still speaks
+with the ring switch on silent.

@@ -2,7 +2,7 @@
 // afterwards. There are no external requests anywhere in this app — no CDNs,
 // no fonts, no analytics — so this list is the entire thing.
 
-const CACHE = 'palavras-v1';
+const CACHE = 'palavras-v2';
 
 const ASSETS = [
   './',
@@ -17,6 +17,7 @@ const ASSETS = [
   'js/parent.js',
   'js/app.js',
   'icons/icon-192.png',
+  'icons/apple-touch-icon.png',
   'icons/icon-512.png',
 ];
 

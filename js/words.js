@@ -8,6 +8,12 @@
 const HOME_LANG = 'pt-BR';
 const TARGET_LANG = 'en-US';
 
+// Which languages she actually HEARS when she taps a picture, in order.
+// English only: ['target'].  Both, English second: ['home', 'target'].
+// This one line drives the whole app — what's played, what counts as saying it
+// back correctly, and which rows parent mode offers to record.
+const SPOKEN_LANGS = ['target'];
+
 const WORDS = [
   { id: 'bola',      emoji: '⚽', home: 'bola',       target: 'ball' },
   { id: 'cachorro',  emoji: '🐶', home: 'cachorro',   target: 'dog' },

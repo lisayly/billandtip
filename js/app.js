@@ -59,13 +59,13 @@
 
     bounce();
 
-    await Audio2.playWord(w, 'home');
-    if (sequenceToken !== token) return;
-    if (!(await wait(220, token))) return;
-
-    await Audio2.playWord(w, 'target');
-    if (sequenceToken !== token) return;
-    if (!(await wait(300, token))) return;
+    // Whatever SPOKEN_LANGS says — English only by default.
+    for (const langKey of SPOKEN_LANGS) {
+      await Audio2.playWord(w, langKey);
+      if (sequenceToken !== token) return;
+      if (!(await wait(220, token))) return;
+    }
+    if (!(await wait(150, token))) return;
 
     ringEl.classList.add('active');
     const { outcome } = await Speech.listenForWord(w, 3200);
@@ -79,7 +79,8 @@
       Progress.recordMiss(w.id);
       Audio2.playTryAgainChime();
       if (!(await wait(700, token))) return;
-      await Audio2.playWord(w, 'home');
+      // model the word again, in the language she's learning
+      await Audio2.playWord(w, SPOKEN_LANGS[0]);
     } else if (outcome === 'attempted') {
       Progress.recordPracticed(w.id);
       Audio2.playAttemptChime();
@@ -92,14 +93,16 @@
     setTimeout(() => cardEl.classList.remove('tapped'), 150);
   }
 
+  // Runs on the first touch. Audio2.unlock() must be called synchronously here,
+  // straight out of the gesture — on iOS anything played after an await is
+  // silently dropped, so this is what makes the app audible at all.
+  // The mic is deliberately NOT opened here; it's taken only while listening.
   function unlockOnce() {
     if (unlocked) return;
     unlocked = true;
+    Audio2.unlock();
     requestFullscreen();
     requestWakeLock();
-    Speech.ensureMic();
-    // warm up the audio context / synthesis engine on the very first gesture
-    if (window.speechSynthesis) window.speechSynthesis.getVoices();
   }
 
   cardEl.addEventListener('pointerup', (e) => {
@@ -129,6 +132,7 @@
   // hidden parent-mode gesture: long-press the near-invisible corner dot
   let pressTimer = null;
   parentDot.addEventListener('pointerdown', () => {
+    unlockOnce(); // so parent mode's play buttons are audible on iOS too
     pressTimer = setTimeout(() => {
       cancelSequence();
       if (navigator.vibrate) navigator.vibrate(40);

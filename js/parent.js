@@ -27,11 +27,14 @@ const ParentPanel = (() => {
   }
 
   function pickMimeType() {
+    // Safari/iOS only produces mp4-aac; Chrome prefers webm-opus. Ask in an
+    // order where each browser hits its own native format first.
     const candidates = [
+      'audio/mp4',
+      'audio/mp4;codecs=mp4a.40.2',
+      'audio/aac',
       'audio/webm;codecs=opus',
       'audio/webm',
-      'audio/mp4',
-      'audio/aac',
       'audio/3gpp',
     ];
     if (!window.MediaRecorder) return null;
@@ -64,7 +67,9 @@ const ParentPanel = (() => {
       title.appendChild(document.createTextNode(`${w.emoji}  ${w.home} / ${w.target}`));
       group.appendChild(title);
 
-      ['home', 'target'].forEach((langKey) => {
+      // one row per language she actually hears (English only by default);
+      // the Portuguese word still shows in the title so you can find the word fast
+      SPOKEN_LANGS.forEach((langKey) => {
         group.appendChild(buildRow(w, langKey));
       });
 
@@ -139,7 +144,7 @@ const ParentPanel = (() => {
       if (activeButton === btn) return;
     }
 
-    const stream = await Speech.ensureMic();
+    const stream = await Speech.acquireMic();
     if (!stream) {
       statusEl.textContent = 'Sem acesso ao microfone. Permita o microfone nas configurações do navegador.';
       return;
@@ -174,6 +179,8 @@ const ParentPanel = (() => {
       statusEl.textContent = '';
       activeRecorder = null;
       activeButton = null;
+      // give the mic back so the ▶ preview plays out of the loud speaker
+      Speech.releaseMic();
     };
 
     activeRecorder = recorder;
@@ -202,6 +209,7 @@ const ParentPanel = (() => {
 
   function close() {
     stopRecording();
+    Speech.releaseMic();
     Audio2.stopAll();
     panel.classList.add('hidden');
   }

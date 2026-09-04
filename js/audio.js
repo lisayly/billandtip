@@ -1,6 +1,14 @@
 // Plays a word: the parent's own recording when one exists, speech synthesis
 // otherwise. Also generates the tiny feedback chimes with the Web Audio API so
 // no sound assets are needed at all (everything works with zero network calls).
+//
+// iOS note — this file is shaped by two Safari rules:
+//   1. Audio may only be *started* from inside a user gesture. Everything we
+//      play happens after an await (IndexedDB lookups), which is outside the
+//      gesture, so unlock() primes all three engines synchronously on the very
+//      first tap and we reuse those primed objects forever after.
+//   2. A media element is unlocked individually, so we keep ONE <audio> element
+//      for the life of the app rather than doing `new Audio()` per word.
 
 const Audio2 = (() => {
   let actx = null;
@@ -8,6 +16,63 @@ const Audio2 = (() => {
     if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
     if (actx.state === 'suspended') actx.resume();
     return actx;
+  }
+
+  // The one <audio> element, unlocked on first tap and reused for every
+  // recorded/bundled word from then on.
+  const sharedEl = new window.Audio();
+  sharedEl.preload = 'auto';
+  sharedEl.playsInline = true;
+  sharedEl.setAttribute('playsinline', '');
+
+  const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+
+  let unlocked = false;
+
+  // Must be called synchronously from inside a real touch handler, before any
+  // await. Without this, iOS plays absolutely nothing and gives no error.
+  function unlock() {
+    if (unlocked) return;
+    unlocked = true;
+
+    // Let audio out even when the ringer switch is on silent (iOS 16.4+).
+    setAudioSession('playback');
+
+    // 1. Web Audio (the feedback chimes)
+    try {
+      const c = ctx();
+      const buf = c.createBuffer(1, 1, 22050);
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      src.connect(c.destination);
+      src.start(0);
+    } catch { /* ignore */ }
+
+    // 2. the shared media element (recorded words)
+    try {
+      sharedEl.src = SILENT_WAV;
+      const p = sharedEl.play();
+      if (p && p.then) p.then(() => sharedEl.pause()).catch(() => {});
+    } catch { /* ignore */ }
+
+    // 3. speech synthesis (the words we didn't record)
+    try {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.getVoices();
+        const u = new SpeechSynthesisUtterance('');
+        u.volume = 0;
+        window.speechSynthesis.speak(u);
+      }
+    } catch { /* ignore */ }
+  }
+
+  // iOS 16.4+ lets a page declare what its audio is for. 'playback' ignores the
+  // silent switch; 'play-and-record' is needed while the mic is open, and keeps
+  // output on the loud speaker instead of dropping to the earpiece.
+  function setAudioSession(type) {
+    try {
+      if (navigator.audioSession) navigator.audioSession.type = type;
+    } catch { /* not supported — nothing to do */ }
   }
 
   // in-memory cache of blob -> object URL so we don't re-read IndexedDB every tap
@@ -34,14 +99,12 @@ const Audio2 = (() => {
     urlCache.delete(recKey(wordId, langKey));
   }
 
-  let currentEl = null;
   let currentUtterance = null;
 
   function stopAll() {
-    if (currentEl) {
-      currentEl.pause();
-      currentEl = null;
-    }
+    try {
+      sharedEl.pause();
+    } catch { /* ignore */ }
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -51,11 +114,19 @@ const Audio2 = (() => {
   function playRecording(url) {
     return new Promise((resolve) => {
       stopAll();
-      const el = new window.Audio(url);
-      currentEl = el;
-      el.onended = () => resolve();
-      el.onerror = () => resolve();
-      el.play().catch(() => resolve());
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      sharedEl.onended = finish;
+      sharedEl.onerror = finish;
+      sharedEl.src = url;
+      try {
+        const p = sharedEl.play();
+        if (p && p.catch) p.catch(finish);
+      } catch {
+        finish();
+      }
+      // never hang the sequence on a clip that won't fire its events
+      setTimeout(finish, 6000);
     });
   }
 
@@ -157,6 +228,8 @@ const Audio2 = (() => {
   return {
     playWord,
     sourceFor,
+    unlock,
+    setAudioSession,
     stopAll,
     playCorrectChime,
     playTryAgainChime,

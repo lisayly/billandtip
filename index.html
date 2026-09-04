@@ -5,12 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#2d98da">
 <meta name="mobile-web-app-capable" content="yes">
+<!-- iOS: these three are what make it launch fullscreen from the home screen -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Palavras">
+<meta name="format-detection" content="telephone=no">
 <title>Palavras</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
+<!-- iOS ignores the manifest icons and uses this one, at 180x180 -->
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -32,8 +36,9 @@
       </div>
 
       <p class="parent-hint">
-        Grave sua própria voz para cada palavra. O que não tiver gravação usa
-        voz sintética automaticamente. Toque numa palavra para gravar, ouvir ou apagar.
+        Ela ouve as palavras em inglês. Grave sua própria voz em inglês para as
+        palavras que você quiser — o que não tiver gravação usa voz sintética
+        automaticamente. Toque para gravar (●), ouvir (▶) ou apagar (✕).
       </p>
 
       <div class="parent-status" id="mic-status"></div>

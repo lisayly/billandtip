@@ -73,7 +73,8 @@ function check(name, ok, extra = '') {
     Speech.listenForWord = origListen;
     return said;
   });
-  check('tap plays home word then English word', spoken.length === 2 && spoken[0].endsWith(':home') && spoken[1].endsWith(':target'), JSON.stringify(spoken));
+  check('tap plays the English word only',
+    spoken.length === 1 && spoken[0].endsWith(':target'), JSON.stringify(spoken));
 
   // 4. a correct answer is recorded, and lowers that word's weight
   const afterCorrect = await page.evaluate(() => {
@@ -140,7 +141,8 @@ function check(name, ok, extra = '') {
 
   const rows = await page.locator('.word-row').count();
   const groups = await page.locator('.word-group').count();
-  check('parent mode lists every word in both languages', groups === 30 && rows === 60, `${groups} words, ${rows} rows`);
+  check('parent mode offers a recording row for each spoken language',
+    groups === 30 && rows === 30, `${groups} words, ${rows} rows`);
 
   // 10. recording own voice: record -> stored -> used instead of synthesis
   const recResult = await page.evaluate(async () => {
@@ -150,8 +152,8 @@ function check(name, ok, extra = '') {
     await new Promise(r => setTimeout(r, 900));
     rowBtn.click();
     await new Promise(r => setTimeout(r, 700));
-    const blob = await Storage.getRecording(id, 'home');
-    const url = await Audio2.getRecordingURL(id, 'home');
+    const blob = await Storage.getRecording(id, SPOKEN_LANGS[0]);
+    const url = await Audio2.getRecordingURL(id, SPOKEN_LANGS[0]);
     return { hasBlob: !!blob, size: blob ? blob.size : 0, usesRecording: !!url };
   });
   check('parent can record own voice, app then prefers it',
@@ -159,7 +161,7 @@ function check(name, ok, extra = '') {
 
   // 11. synthesis fallback for words with no recording
   const fallback = await page.evaluate(async () => {
-    const w = WORDS[3];
+    const w = WORDS[7]; // not touched by the recording test above
     let usedSynthesis = false;
     const orig = window.speechSynthesis.speak;
     window.speechSynthesis.speak = function (u) { usedSynthesis = u.text; };
@@ -179,9 +181,10 @@ function check(name, ok, extra = '') {
   check('service worker active', swReady);
 
   const cached = await page.evaluate(async () => {
-    const cache = await caches.open('palavras-v1');
+    const names = (await caches.keys()).filter(n => n.startsWith('palavras-'));
+    const cache = await caches.open(names[0]);
     const keys = await cache.keys();
-    return keys.map(k => new URL(k.url).pathname);
+    return keys.map(k => k.url.replace(/^https?:\/\/[^/]+/, ''));
   });
   check('whole app cached for offline use', cached.length >= 12, `${cached.length} files cached`);
 
@@ -217,30 +220,30 @@ function check(name, ok, extra = '') {
   const matching = await page.evaluate(() => {
     const ball = WORDS.find(w => w.id === 'bola');
     return {
-      exactHome: Speech.matchesEither('bola', ball),
-      exactTarget: Speech.matchesEither('ball', ball),
-      babble: Speech.matchesEither('bó', ball),
-      caps: Speech.matchesEither('Bola.', ball),
-      accented: Speech.matchesEither('maça', WORDS.find(w => w.id === 'maca')),
-      wrong: Speech.matchesEither('cachorro', ball),
-      nonsense: Speech.matchesEither('telefone', ball),
+      english: Speech.matchesSpoken('ball', ball),
+      babble: Speech.matchesSpoken('bal', ball),
+      caps: Speech.matchesSpoken('Ball.', ball),
+      englishOther: Speech.matchesSpoken('cookie', WORDS.find(w => w.id === 'biscoito')),
+      portuguese: Speech.matchesSpoken('bola', ball),   // she's learning English
+      wrong: Speech.matchesSpoken('dog', ball),
+      nonsense: Speech.matchesSpoken('telefone', ball),
     };
   });
-  check('accepts either language + toddler approximations, rejects wrong words',
-    matching.exactHome && matching.exactTarget && matching.babble && matching.caps &&
-    matching.accented && !matching.wrong && !matching.nonsense,
+  check('accepts English + toddler approximations, not the Portuguese word',
+    matching.english && matching.babble && matching.caps && matching.englishOther &&
+    !matching.portuguese && !matching.wrong && !matching.nonsense,
     JSON.stringify(matching));
 
   // 17. a bundled voice file (recorded on a computer) beats synthesis
   const bundledCtx = await browser.newContext({ viewport: { width: 412, height: 869 }, serviceWorkers: 'block' });
   const bundledPage = await bundledCtx.newPage();
   await bundledPage.route('**/audio/manifest.json', (route) =>
-    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ext: '.mp3', home: ['gato'], target: [] }) }));
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ext: '.mp3', home: [], target: ['gato'] }) }));
   await bundledPage.goto(URL, { waitUntil: 'networkidle' });
   await bundledPage.waitForTimeout(300);
   const bundledSrc = await bundledPage.evaluate(async () => ({
-    listed: await Audio2.sourceFor('gato', 'home'),
-    notListed: await Audio2.sourceFor('lua', 'home'),
+    listed: await Audio2.sourceFor('gato', 'target'),
+    notListed: await Audio2.sourceFor('lua', 'target'),
   }));
   check('bundled voice file used when provided, synthesis otherwise',
     bundledSrc.listed === 'file' && bundledSrc.notListed === 'synthesis', JSON.stringify(bundledSrc));
@@ -265,6 +268,111 @@ function check(name, ok, extra = '') {
   });
   check('recognizer failure never reads as a wrong answer',
     degradedOutcome !== 'miss' && degradedOutcome !== 'correct', `outcome=${degradedOutcome}`);
+
+  // ---- iOS/Safari rules. Real WebKit isn't available in this sandbox, so these
+  // verify the logic the Safari fixes depend on; the device itself still needs
+  // a once-over on a real iPhone.
+
+  // 19. THE iOS rule: audio must be unlocked synchronously inside the gesture.
+  // If unlock() ever moves after an await, iOS goes permanently silent, so this
+  // asserts it has already run by the time the event handler returns.
+  const iosCtx = await browser.newContext({
+    viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true,
+    permissions: ['microphone'],
+  });
+  const iosPage = await iosCtx.newPage();
+  await iosPage.addInitScript(() => {
+    // Shape this context like an offline iPhone: no usable Web Speech
+    // recognizer, so listening takes the on-device voice-activity path that
+    // actually touches the microphone.
+    delete window.SpeechRecognition;
+    delete window.webkitSpeechRecognition;
+    window.__audioEls = 0;
+    const RealAudio = window.Audio;
+    window.Audio = function (...args) { window.__audioEls++; return new RealAudio(...args); };
+    window.Audio.prototype = RealAudio.prototype;
+    // stub the iOS 16.4+ audio session API so we can watch how it's driven
+    window.__sessionTypes = [];
+    let _t = 'auto';
+    Object.defineProperty(navigator, 'audioSession', {
+      configurable: true,
+      value: { get type() { return _t; }, set type(v) { _t = v; window.__sessionTypes.push(v); } },
+    });
+  });
+  await iosPage.goto(URL, { waitUntil: 'networkidle' });
+
+  const gestureSync = await iosPage.evaluate(() => {
+    let unlockedDuringHandler = false;
+    const realUnlock = Audio2.unlock;
+    Audio2.unlock = function () { unlockedDuringHandler = true; return realUnlock.apply(this, arguments); };
+    // dispatchEvent runs listeners synchronously: if unlock sat behind an await,
+    // this flag would still be false when dispatchEvent returns.
+    document.getElementById('card').dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+    return unlockedDuringHandler;
+  });
+  check('audio is unlocked synchronously inside the tap (iOS rule)', gestureSync === true);
+
+  // 20. one shared <audio> element, not one per word (iOS unlocks per element)
+  const elCount = await iosPage.evaluate(async () => {
+    const before = window.__audioEls;
+    await Audio2.playWord(WORDS[0], 'home');
+    await Audio2.playWord(WORDS[1], 'home');
+    await Audio2.playWord(WORDS[2], 'target');
+    return { before, after: window.__audioEls };
+  });
+  check('reuses one unlocked <audio> element for every word',
+    elCount.after === elCount.before, `created ${elCount.after - elCount.before} new elements`);
+
+  // 21. the ringer/silent switch is overridden, and the session flips to
+  // play-and-record only while the mic is open
+  const session = await iosPage.evaluate(async () => {
+    window.__sessionTypes.length = 0;
+    await Speech.listenForWord(WORDS[0], 400);
+    return window.__sessionTypes;
+  });
+  check('audio session: play-and-record while listening, back to playback after',
+    session.includes('play-and-record') && session[session.length - 1] === 'playback',
+    JSON.stringify(session));
+
+  // 22. the mic is handed back after listening, or iOS keeps playback quiet
+  const micReleased = await iosPage.evaluate(async () => {
+    const streams = [];
+    const realGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = async (c) => { const s = await realGUM(c); streams.push(s); return s; };
+    await Speech.listenForWord(WORDS[1], 400);
+    const live = streams.flatMap(s => s.getAudioTracks()).filter(t => t.readyState === 'live').length;
+    return { grabbed: streams.length, live };
+  });
+  check('microphone is released after each listening turn',
+    micReleased.grabbed > 0 && micReleased.live === 0, JSON.stringify(micReleased));
+
+  // 23. the child's screen swallows gestures but parent mode must still scroll
+  const touchActions = await iosPage.evaluate(() => ({
+    app: getComputedStyle(document.getElementById('app')).touchAction,
+    body: getComputedStyle(document.body).touchAction,
+    parent: getComputedStyle(document.querySelector('.parent-scroll')).touchAction,
+  }));
+  check('play screen locked, parent list still scrollable',
+    touchActions.app === 'none' && touchActions.body !== 'none' && touchActions.parent.includes('pan-y'),
+    JSON.stringify(touchActions));
+
+  // 24. iOS home-screen icon: it ignores the manifest and needs this exact link
+  const iosIcon = await iosPage.evaluate(() => {
+    const l = document.querySelector('link[rel="apple-touch-icon"]');
+    return l ? { href: l.getAttribute('href'), sizes: l.getAttribute('sizes') } : null;
+  });
+  const iconRes = await iosPage.request.get(URL.replace(/index\.html$/, '') + iosIcon.href);
+  check('apple-touch-icon present at 180x180 and actually served',
+    iosIcon.sizes === '180x180' && iconRes.status() === 200, JSON.stringify(iosIcon));
+
+  const iosMeta = await iosPage.evaluate(() => ({
+    capable: document.querySelector('meta[name="apple-mobile-web-app-capable"]')?.content,
+    title: document.querySelector('meta[name="apple-mobile-web-app-title"]')?.content,
+  }));
+  check('installs fullscreen from the iOS home screen',
+    iosMeta.capable === 'yes' && !!iosMeta.title, JSON.stringify(iosMeta));
+
+  await iosCtx.close();
 
   check('no console errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 

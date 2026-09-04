@@ -1,31 +1,64 @@
 // Listens for the child's attempt at the word and decides if she got it.
 //
-// Best case (online, and the browser exposes SpeechRecognition — true on most
-// Android Chrome/WebView): we get a real transcript and fuzzy-match it against
-// the word in either language.
+// Best case (online, and the browser exposes SpeechRecognition — Safari has it
+// from iOS 14.5): we get a real transcript and fuzzy-match it against the word.
 //
-// Offline (the normal case on this app, since it's meant to run with no
-// connection): the Web Speech recognizer isn't usable at all — Chrome's
-// implementation always calls out to Google's servers, offline dictation
-// packs don't back it. We fall back to on-device voice-activity detection:
-// we can hear THAT she said something and roughly how words-like it sounded,
-// but not confirm WHICH word. In that mode every attempt gets warm, neutral
-// feedback and is logged as "practiced" rather than right/wrong, so we never
-// tell her she's wrong when we simply couldn't check.
+// Offline (the normal case here, since the app is meant to run with no
+// connection): the Web Speech recognizer isn't usable — Safari's implementation
+// goes out to Apple's servers, and iOS's on-device dictation isn't exposed to
+// web pages. Safari also wants start() to come from a user gesture, which ours
+// can't, since it follows the word playing. Either way it fails safe.
+//
+// So we fall back to on-device voice-activity detection: we can hear THAT she
+// said something, but not confirm WHICH word. In that mode every attempt gets
+// warm, neutral feedback and is logged as "practised" rather than right/wrong,
+// so we never tell her she's wrong when we simply couldn't check.
 
 const Speech = (() => {
   const hasRecognition = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
   let micStream = null;
   let micDenied = false;
 
-  async function ensureMic() {
-    if (micStream || micDenied) return micStream;
+  // iOS holds the audio session in record mode for as long as a mic stream is
+  // live, which drops playback off the loud speaker and makes the words sound
+  // faint and far away. So we take the mic only while actually listening and
+  // hand it straight back.
+  async function acquireMic() {
+    if (micDenied) return null;
+    if (micStream && micStream.getAudioTracks().some((t) => t.readyState === 'live')) {
+      return micStream;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return null;
     try {
+      Audio2.setAudioSession('play-and-record');
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch {
-      micDenied = true;
+    } catch (e) {
+      // Only a real refusal is permanent. Everything else — the mic being busy
+      // with a call or another app, an interrupted audio session, a request
+      // that collided with one already in flight — is temporary, and latching
+      // on it would leave the app deaf for the rest of the session.
+      if (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) {
+        micDenied = true;
+      }
+      micStream = null;
+      Audio2.setAudioSession('playback');
     }
     return micStream;
+  }
+
+  function releaseMic() {
+    if (micStream) {
+      micStream.getTracks().forEach((t) => { try { t.stop(); } catch { /* ignore */ } });
+      micStream = null;
+    }
+    vadSource = null; // its stream is gone; a fresh one is built next listen
+    Audio2.setAudioSession('playback');
+  }
+
+  // kept for callers that just want to know whether the mic is usable
+  async function ensureMic() {
+    const s = await acquireMic();
+    return s;
   }
 
   function normalize(s) {
@@ -65,8 +98,12 @@ const Speech = (() => {
     return dist <= Math.max(1, Math.floor(w.length * 0.4));
   }
 
-  function matchesEither(transcript, wordEntry) {
-    return fuzzyMatches(transcript, wordEntry.home) || fuzzyMatches(transcript, wordEntry.target);
+  // Only the languages she actually hears count as saying it back. With
+  // SPOKEN_LANGS = ['target'] that means English: if she answers "bola" for the
+  // ball she gets the gentle try-again tone and hears "ball" modelled again,
+  // which is the whole point of the app.
+  function matchesSpoken(transcript, wordEntry) {
+    return SPOKEN_LANGS.some((langKey) => fuzzyMatches(transcript, wordEntry[langKey]));
   }
 
   // Set once the recognizer proves unusable on this device/connection, so we
@@ -77,7 +114,7 @@ const Speech = (() => {
     return new Promise((resolve) => {
       const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
       const rec = new Rec();
-      rec.lang = HOME_LANG;
+      rec.lang = SPOKEN_LANGS[0] === 'home' ? HOME_LANG : TARGET_LANG;
       rec.continuous = false;
       rec.interimResults = false;
       rec.maxAlternatives = 3;
@@ -92,7 +129,7 @@ const Speech = (() => {
 
       rec.onresult = (e) => {
         const alts = Array.from(e.results[0]).map((a) => a.transcript);
-        const hit = alts.find((a) => matchesEither(a, wordEntry));
+        const hit = alts.find((a) => matchesSpoken(a, wordEntry));
         finish(hit ? 'correct' : 'miss', alts[0]);
       };
       rec.onerror = (e) => {
@@ -119,21 +156,31 @@ const Speech = (() => {
     });
   }
 
-  // One analyser for the life of the app — old phones don't like having a new
-  // AudioContext built and torn down on every tap.
+  // One AudioContext and analyser for the life of the app — phones don't like
+  // having them built and torn down on every tap. Only the source node is
+  // rebuilt, because each listening turn gets a fresh mic stream.
+  let vadCtx = null;
   let vadAnalyser = null;
+  let vadSource = null;
   let vadData = null;
 
   async function ensureAnalyser() {
-    if (vadAnalyser) return vadAnalyser;
-    const stream = await ensureMic();
+    const stream = await acquireMic();
     if (!stream) return null;
-    const c = new (window.AudioContext || window.webkitAudioContext)();
-    const src = c.createMediaStreamSource(stream);
-    vadAnalyser = c.createAnalyser();
-    vadAnalyser.fftSize = 512;
-    src.connect(vadAnalyser);
-    vadData = new Uint8Array(vadAnalyser.frequencyBinCount);
+
+    if (!vadCtx) {
+      vadCtx = new (window.AudioContext || window.webkitAudioContext)();
+      vadAnalyser = vadCtx.createAnalyser();
+      vadAnalyser.fftSize = 512;
+      vadData = new Uint8Array(vadAnalyser.frequencyBinCount);
+    }
+    if (vadCtx.state === 'suspended') {
+      try { await vadCtx.resume(); } catch { /* ignore */ }
+    }
+    if (!vadSource) {
+      vadSource = vadCtx.createMediaStreamSource(stream);
+      vadSource.connect(vadAnalyser);
+    }
     return vadAnalyser;
   }
 
@@ -174,14 +221,26 @@ const Speech = (() => {
 
   // Returns { outcome: 'correct' | 'miss' | 'attempted' | 'silence' | 'unavailable', transcript }
   async function listenForWord(wordEntry, timeoutMs = 3200) {
-    if (hasRecognition && !recognitionUnusable && navigator.onLine) {
-      const res = await listenWithRecognition(wordEntry, timeoutMs);
-      // The recognizer couldn't run at all — don't let that read as a wrong
-      // answer; fall through to the offline path for this attempt.
-      if (res.outcome !== 'degraded') return res;
+    try {
+      if (hasRecognition && !recognitionUnusable && navigator.onLine) {
+        const res = await listenWithRecognition(wordEntry, timeoutMs);
+        // The recognizer couldn't run at all — don't let that read as a wrong
+        // answer; fall through to the offline path for this attempt.
+        if (res.outcome !== 'degraded') return res;
+      }
+      return await listenWithVAD(timeoutMs);
+    } finally {
+      // hand the mic back so the next word plays at full volume
+      releaseMic();
     }
-    return listenWithVAD(timeoutMs);
   }
 
-  return { listenForWord, matchesEither, ensureMic, get hasRecognition() { return hasRecognition; } };
+  return {
+    listenForWord,
+    matchesSpoken,
+    ensureMic,
+    acquireMic,
+    releaseMic,
+    get hasRecognition() { return hasRecognition; },
+  };
 })();
