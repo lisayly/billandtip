@@ -1,0 +1,6 @@
+{
+  "_comment": "Optional pre-recorded voice files, for when it's easier to record on a computer than in the app. Drop <word-id>.mp3 (or .m4a/.ogg) into audio/home/ or audio/target/, then list the word id here. The app prefers: in-app recording > this file > speech synthesis.",
+  "ext": ".mp3",
+  "home": [],
+  "target": []
+}
