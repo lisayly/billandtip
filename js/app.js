@@ -149,14 +149,19 @@
   let pressTimer = null;
   parentDot.addEventListener('pointerdown', () => {
     unlockOnce(); // so parent mode's play buttons are audible on iOS too
+    parentDot.classList.add('holding'); // the dot fills while you hold it
     pressTimer = setTimeout(() => {
+      parentDot.classList.remove('holding');
       cancelSequence();
       if (navigator.vibrate) navigator.vibrate(40);
       ParentPanel.open();
-    }, 2500);
+    }, 1200);
   });
   ['pointerup', 'pointercancel', 'pointerleave'].forEach((evt) => {
-    parentDot.addEventListener(evt, () => clearTimeout(pressTimer));
+    parentDot.addEventListener(evt, () => {
+      clearTimeout(pressTimer);
+      parentDot.classList.remove('holding');
+    });
   });
 
   document.addEventListener('contextmenu', (e) => e.preventDefault());

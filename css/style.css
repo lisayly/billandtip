@@ -83,16 +83,37 @@ html, body {
 .edge-left  { left: 0; }
 .edge-right { right: 0; }
 
-/* Sits below the notch / Dynamic Island, otherwise it's unpressable on an
-   iPhone in fullscreen mode. Still invisible, still off in the corner. */
+/* The way in to parent mode. Deliberately small and quiet so it isn't part of
+   her screen, but visible enough that an adult can find it — an invisible
+   target is no good to the person who has to record 30 words. It needs a
+   press-and-hold, so her tapping and palming the screen never opens it.
+   Sits below the notch, or it can't be pressed at all on an iPhone. */
 #parent-dot {
   position: absolute;
   top: env(safe-area-inset-top, 0px);
   right: env(safe-area-inset-right, 0px);
-  width: 46px;
-  height: 46px;
+  width: 56px;
+  height: 56px;
   z-index: 5;
-  opacity: 0.02;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#parent-dot::after {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.45);
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.12);
+  transition: transform 1.2s linear, background-color 0.2s ease;
+}
+
+/* fills up while held, so you can see the press is working */
+#parent-dot.holding::after {
+  transform: scale(2.4);
+  background: rgba(255,255,255,0.95);
 }
 
 /* ---------- parent panel (text is fine here — it's for the adult) ---------- */
@@ -327,4 +348,26 @@ html, body {
 .ra-actions {
   display: flex;
   gap: 10px;
+}
+
+/* Live microphone level while recording — the answer to "is it hearing me?" */
+.ra-level {
+  width: 220px;
+  height: 10px;
+  border-radius: 5px;
+  background: #2a2e37;
+  overflow: hidden;
+}
+.ra-level-fill {
+  height: 100%;
+  width: 0%;
+  background: #20bf6b;
+  transition: width 0.08s linear;
+}
+.ra-help {
+  font-size: 13px;
+  color: #aab0bb;
+  text-align: center;
+  line-height: 1.45;
+  max-width: 320px;
 }

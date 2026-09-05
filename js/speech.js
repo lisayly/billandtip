@@ -235,9 +235,23 @@ const Speech = (() => {
     }
   }
 
+  // 0..1 loudness right now, for the recording level meter. Lets a parent SEE
+  // that the microphone is picking her up instead of guessing.
+  async function startLevelMeter() {
+    return !!(await ensureAnalyser());
+  }
+  function readLevel() {
+    if (!vadAnalyser || !vadData) return 0;
+    vadAnalyser.getByteFrequencyData(vadData);
+    const avg = vadData.reduce((a, b) => a + b, 0) / vadData.length;
+    return Math.min(1, avg / 60); // 60 ≈ a normal speaking voice
+  }
+
   return {
     listenForWord,
     matchesSpoken,
+    startLevelMeter,
+    readLevel,
     ensureMic,
     acquireMic,
     releaseMic,

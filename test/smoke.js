@@ -162,10 +162,26 @@ function check(name, ok, extra = '') {
   await page.waitForTimeout(300);
   check('short press does NOT open parent mode', await page.isHidden('#parent-panel'));
 
+  // the way in has to be *findable* — an invisible target left the parent
+  // unable to record anything at all
+  const dotVisible = await page.evaluate(() => {
+    const dot = document.getElementById('parent-dot');
+    const s = getComputedStyle(dot);
+    const mark = getComputedStyle(dot, '::after');
+    return {
+      opacity: parseFloat(s.opacity),
+      size: dot.getBoundingClientRect().width,
+      markBg: mark.backgroundColor,
+    };
+  });
+  check('the way into parent mode is visible and big enough to hit',
+    dotVisible.opacity >= 0.3 && dotVisible.size >= 44 &&
+    dotVisible.markBg !== 'rgba(0, 0, 0, 0)', JSON.stringify(dotVisible));
+
   await page.evaluate(() => {
     document.getElementById('parent-dot').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
   });
-  await page.waitForTimeout(2800);
+  await page.waitForTimeout(1500);
   check('long press opens parent mode', await page.isVisible('#parent-panel'));
 
   const rows = await page.locator('.word-row').count();
@@ -215,6 +231,8 @@ function check(name, ok, extra = '') {
     btn.click();
     await new Promise(r => setTimeout(r, 800));
     out.showsRecording = btn.classList.contains('recording');
+    // the meter must actually move, so a parent can see the mic is hearing her
+    out.levelMoved = parseFloat(document.getElementById('ra-level-fill').style.width) > 0;
     btn.click();
     await new Promise(r => setTimeout(r, 1200));
 
@@ -232,6 +250,8 @@ function check(name, ok, extra = '') {
     out.closed = document.getElementById('record-all-panel').classList.contains('hidden');
     return out;
   });
+  check('recording shows a live microphone level', guided.levelMoved === true,
+    `meter moved: ${guided.levelMoved}`);
   check('guided pass records a word and moves to the next by itself',
     guided.opened && guided.showsRecording && guided.saved &&
     guided.firstWord === WORDS_EN[0] && guided.advanced === WORDS_EN[1] &&

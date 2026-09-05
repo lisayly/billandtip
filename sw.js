@@ -2,7 +2,7 @@
 // afterwards. There are no external requests anywhere in this app — no CDNs,
 // no fonts, no analytics — so this list is the entire thing.
 
-const CACHE = 'palavras-v4';
+const CACHE = 'palavras-v5';
 
 const ASSETS = [
   './',

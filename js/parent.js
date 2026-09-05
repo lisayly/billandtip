@@ -240,7 +240,32 @@ const ParentPanel = (() => {
     playBtn: document.getElementById('ra-play'),
     skipBtn: document.getElementById('ra-skip'),
     exitBtn: document.getElementById('ra-exit'),
+    level: document.getElementById('ra-level-fill'),
+    help: document.getElementById('ra-help'),
   };
+
+  // Spelled out rather than a bare failure, because this is the step where a
+  // parent gets stuck with no idea why nothing happened.
+  const MIC_BLOCKED_HELP =
+    'O iPhone está bloqueando o microfone. Toque em "aA" na barra do Safari → '
+    + 'Ajustes do site → Microfone → Permitir. Se você abriu pelo ícone da tela '
+    + 'de início, abra uma vez pelo Safari para liberar e depois volte.';
+
+  let levelTimer = null;
+
+  function startLevelMeter() {
+    Speech.startLevelMeter();
+    stopLevelMeter();
+    levelTimer = setInterval(() => {
+      RA.level.style.width = `${Math.round(Speech.readLevel() * 100)}%`;
+    }, 80);
+  }
+
+  function stopLevelMeter() {
+    clearInterval(levelTimer);
+    levelTimer = null;
+    RA.level.style.width = '0%';
+  }
 
   const LANG = SPOKEN_LANGS[0];
   let raIndex = 0;
@@ -249,6 +274,7 @@ const ParentPanel = (() => {
 
   async function raRender() {
     const w = WORDS[raIndex];
+    RA.help.textContent = '';
     RA.emoji.textContent = w.emoji;
     RA.word.textContent = w[LANG];
     RA.sub.textContent = LANG === 'target' ? w.home : w.target;
@@ -265,6 +291,7 @@ const ParentPanel = (() => {
 
   function raClose() {
     raStopRecording();
+    stopLevelMeter();
     Speech.releaseMic();
     Audio2.stopAll();
     RA.panel.classList.add('hidden');
@@ -294,12 +321,15 @@ const ParentPanel = (() => {
     const w = WORDS[raIndex];
     const stream = await Speech.acquireMic();
     if (!stream) {
-      RA.status.textContent = 'Sem acesso ao microfone.';
+      RA.status.textContent = 'Sem acesso ao microfone';
+      RA.help.textContent = MIC_BLOCKED_HELP;
       return;
     }
     const mimeType = pickMimeType();
     if (mimeType === null) {
-      RA.status.textContent = 'Este aparelho não permite gravar áudio.';
+      RA.status.textContent = 'Este aparelho não permite gravar áudio';
+      RA.help.textContent = 'Atualize o iOS (a gravação exige iOS 14.3 ou mais novo). '
+        + 'A voz sintética continua funcionando normalmente.';
       return;
     }
 
@@ -315,6 +345,7 @@ const ParentPanel = (() => {
     recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
     recorder.onstop = async () => {
       raRecorder = null;
+      stopLevelMeter();
       RA.recordBtn.classList.remove('recording');
       RA.recordBtn.textContent = '●';
       const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/mp4' });
@@ -325,7 +356,9 @@ const ParentPanel = (() => {
         RA.status.textContent = '✓ gravada';
         setTimeout(raAdvance, 500); // straight on to the next word
       } else {
-        RA.status.textContent = 'Não gravou nada — tente de novo.';
+        RA.status.textContent = 'Não gravou nada';
+        RA.help.textContent = 'Fale mais perto do telefone e olhe a barra verde — '
+          + 'se ela não se mexe, o microfone não está ouvindo.';
       }
     };
 
@@ -333,6 +366,8 @@ const ParentPanel = (() => {
     RA.recordBtn.classList.add('recording');
     RA.recordBtn.textContent = '■';
     RA.status.textContent = 'Gravando… toque para parar';
+    RA.help.textContent = '';
+    startLevelMeter();
     recorder.start();
     raStopTimer = setTimeout(raStopRecording, 5000);
   }

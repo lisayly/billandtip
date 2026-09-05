@@ -31,7 +31,10 @@ this — there's no progress bar and no score anywhere in the app.
 
 Everything for grown-ups is behind one hidden gesture:
 
-> **Press and hold the very top-right corner of the screen for 2.5 seconds.**
+> **Press and hold the small pale dot in the top-right corner for ~1.2 seconds.**
+>
+> It fills up while you hold it, so you can see the press is registering. A tap
+> does nothing, which is what keeps her out of it.
 
 That opens parent mode, the only screen in the app with words on it. There you
 can record your own voice for any word, hear what it currently sounds like,
@@ -55,6 +58,12 @@ done are marked "✓ já gravada", so you can start, stop, and come back later.
 
 Either way: tap ●, say the word, tap ■ to stop. It's saved straight onto the
 phone. Recording stops on its own after 5 seconds if you forget.
+
+**While recording, a green bar shows the microphone level.** If you speak and the
+bar doesn't move, the phone isn't hearing you — that's a permission problem, not
+a recording problem, and the screen says how to fix it: Safari's **aA** menu →
+Ajustes do site → Microfone → Permitir. iOS only asks once, so if you dismissed
+that prompt the app has no way to ask again by itself.
 
 Each word shows one row — 🇬🇧 English, the language she hears. The Portuguese word
 is shown alongside so you can find the object quickly; it is never played to her.
@@ -197,7 +206,7 @@ with the old app and the phone never changed.
 ## Running and testing it locally
 
 ```bash
-npm test           # 34 app checks + 5 update checks, in a real browser
+npm test           # 36 app checks + 5 update checks, in a real browser
 ```
 
 The suite covers the things that actually matter here: that the child-facing
