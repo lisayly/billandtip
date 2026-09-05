@@ -5,7 +5,7 @@
   "description": "Voice-only bilingual word app for a toddler. Runs offline, no build step.",
   "scripts": {
     "start": "npx http-server -p 8899 -c-1 .",
-    "test": "node test/smoke.js"
+    "test": "node test/smoke.js && node test/update.js"
   },
   "devDependencies": {
     "playwright": "^1.56.1"

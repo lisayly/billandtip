@@ -36,13 +36,29 @@ async function bundledAudioAssets() {
   }
 }
 
+// Every fetch here uses cache:'reload' to go past the browser's own HTTP cache.
+// Without it a host that sends max-age (GitHub Pages does) hands back the file
+// it served ten minutes ago, and the "new" cache quietly fills up with the old
+// app — the update looks like it worked and nothing on the phone changes.
+function freshRequest(url) {
+  return new Request(url, { cache: 'reload' });
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
-    await cache.addAll(ASSETS);
+    await Promise.all(ASSETS.map(async (url) => {
+      const res = await fetch(freshRequest(url));
+      if (res.ok) await cache.put(url, res);
+    }));
     const audio = await bundledAudioAssets();
     // tolerate a mis-listed filename rather than failing the whole install
-    await Promise.all(audio.map((url) => cache.add(url).catch(() => {})));
+    await Promise.all(audio.map(async (url) => {
+      try {
+        const res = await fetch(freshRequest(url));
+        if (res.ok) await cache.put(url, res);
+      } catch { /* skip */ }
+    }));
     await self.skipWaiting();
   })());
 });

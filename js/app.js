@@ -10,6 +10,8 @@
   let index = 0;
   let sequenceToken = 0; // bumped to cancel any in-flight sequence
   let unlocked = false;
+  let busy = false;          // a word is playing or she's being listened to
+  let pendingReload = false; // a new version is ready, waiting for a quiet moment
 
   function currentWord() {
     return queue[index];
@@ -44,6 +46,8 @@
     sequenceToken += 1;
     Audio2.stopAll();
     ringEl.classList.remove('active');
+    busy = false;
+    if (pendingReload) window.location.reload();
   }
 
   function wait(ms, token) {
@@ -55,6 +59,19 @@
   async function runSequence() {
     const token = ++sequenceToken;
     Audio2.stopAll();
+    busy = true;
+    try {
+      await playAndListen(token);
+    } finally {
+      // only the newest sequence owns the flag
+      if (sequenceToken === token) {
+        busy = false;
+        if (pendingReload) window.location.reload();
+      }
+    }
+  }
+
+  async function playAndListen(token) {
     const w = currentWord();
 
     bounce();
@@ -166,10 +183,38 @@
     }
   });
 
+  // Updates. The phone should pick up a new version by itself, without anyone
+  // reinstalling anything, and without interrupting her mid-word.
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      // updateViaCache:'none' means the browser always re-checks sw.js itself
+      // rather than trusting its HTTP cache — otherwise an update can sit
+      // unnoticed for as long as the host's cache header says.
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+        .then((reg) => reg.update().catch(() => {}))
+        .catch(() => {});
     });
+
+    // A new version took over: swap to it at the first quiet moment, so the new
+    // words/voices are live on this launch instead of two launches later.
+    // On the very first install there's no controller yet and the page is
+    // already current — reloading then would just be a pointless flash.
+    const hadController = !!navigator.serviceWorker.controller;
+    let refreshed = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshed || !hadController) return;
+      refreshed = true;
+      reloadWhenIdle();
+    });
+  }
+
+  function reloadWhenIdle() {
+    // never yank the screen out from under her in the middle of a word
+    if (!busy) {
+      window.location.reload();
+      return;
+    }
+    pendingReload = true;
   }
 
   render();

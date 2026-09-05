@@ -155,13 +155,32 @@ It drives everything at once — what's played, what counts as saying it back
 correctly, and which rows parent mode offers to record. `HOME_LANG` and
 `TARGET_LANG` set the two speech-synthesis voices.
 
-If you edit any file, bump `CACHE` in `sw.js` (`palavras-v3` → `-v4`) so the
-iPhone picks up the new version instead of the cached old one.
+## Updating the app after it's installed
+
+Nobody has to reinstall anything, and nothing of hers is lost — recordings and
+progress live outside the app's cache and are untouched by an update.
+
+1. Change whatever you want.
+2. **Bump `CACHE` in `sw.js`** (`palavras-v3` → `palavras-v4`). This is the one
+   step that's easy to forget and it's what tells the phones a new version
+   exists.
+3. Publish (push, if you're using GitHub Pages).
+4. On the iPhone, open the app **once with internet**. It picks up the new
+   version and reloads itself — unless she's mid-word, in which case it waits
+   for her to finish. After that it's offline again as usual.
+
+If you skip step 2 the phone keeps happily running the old version.
+
+`npm test` includes an update test that installs the app, publishes a change,
+and checks it actually arrives on the next launch with her recordings intact.
+That test exists because this silently broke once: the service worker refetched
+the files through the browser's own HTTP cache, so the "new" cache filled up
+with the old app and the phone never changed.
 
 ## Running and testing it locally
 
 ```bash
-npm test           # 34 end-to-end checks in a real browser
+npm test           # 34 app checks + 5 update checks, in a real browser
 ```
 
 The suite covers the things that actually matter here: that the child-facing
