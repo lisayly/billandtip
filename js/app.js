@@ -118,7 +118,6 @@
     if (unlocked) return;
     unlocked = true;
     Audio2.unlock();
-    requestFullscreen();
     requestWakeLock();
   }
 
@@ -164,12 +163,6 @@
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) cancelSequence();
   });
-
-  function requestFullscreen() {
-    const el = document.documentElement;
-    const req = el.requestFullscreen || el.webkitRequestFullscreen;
-    if (req) req.call(el).catch(() => {});
-  }
 
   let wakeLock = null;
   async function requestWakeLock() {

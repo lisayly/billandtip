@@ -79,8 +79,8 @@ screen and then runs offline like any other app.
 2. On the iPhone, open that URL **in Safari**. It has to be Safari — Chrome on
    iOS can't install to the home screen.
 3. **Share button (□↑) → Add to Home Screen → Add.**
-4. Open it from the home-screen icon from then on. Launched that way it runs
-   fullscreen with no Safari bars, and its storage is exempt from the 7-day
+4. Open it from the home-screen icon from then on. Launched that way it runs as
+   its own app with no Safari bars, and its storage is exempt from the 7-day
    clear-out Safari applies to ordinary websites — which matters, because your
    recordings live in it.
 5. Tap the picture once and say yes to the microphone prompt.
@@ -89,6 +89,23 @@ screen and then runs offline like any other app.
 
 The `https` bit is not optional — the microphone and offline caching are both
 blocked on plain `http`. Anything on `localhost` or a real `https` host is fine.
+
+### How much screen the app takes
+
+`manifest.json` → `display`, plus the `apple-mobile-web-app-capable` meta in
+`index.html`. Three options on iOS, from most locked-down to least:
+
+| What you want | `display` | `apple-mobile-web-app-capable` |
+|---|---|---|
+| Truly fullscreen, no status bar | `fullscreen` | `yes` |
+| **App, status bar visible (current)** | `standalone` | `yes` |
+| A normal Safari tab, with the address bar | `browser` | `no` |
+
+The last one is the one to pick if you want to be able to reload it, see the
+URL, or get out easily while testing — but she can then reach Safari's buttons.
+Change it, bump `CACHE` in `sw.js`, and **delete and re-add the home-screen
+icon**: iOS reads these only when the icon is created, so an existing icon keeps
+whatever mode it was added with.
 
 ### Two iPhone settings worth knowing
 

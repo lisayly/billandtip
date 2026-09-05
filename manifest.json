@@ -3,7 +3,7 @@
   "short_name": "Palavras",
   "start_url": "./index.html",
   "scope": "./",
-  "display": "fullscreen",
+  "display": "standalone",
   "orientation": "portrait",
   "background_color": "#2d98da",
   "theme_color": "#2d98da",

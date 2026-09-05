@@ -444,12 +444,21 @@ function check(name, ok, extra = '') {
   check('apple-touch-icon present at 180x180 and actually served',
     iosIcon.sizes === '180x180' && iconRes.status() === 200, JSON.stringify(iosIcon));
 
-  const iosMeta = await iosPage.evaluate(() => ({
-    capable: document.querySelector('meta[name="apple-mobile-web-app-capable"]')?.content,
-    title: document.querySelector('meta[name="apple-mobile-web-app-title"]')?.content,
-  }));
-  check('installs fullscreen from the iOS home screen',
-    iosMeta.capable === 'yes' && !!iosMeta.title, JSON.stringify(iosMeta));
+  const iosMeta = await iosPage.evaluate(async () => {
+    const manifest = await (await fetch('manifest.json')).json();
+    return {
+      capable: document.querySelector('meta[name="apple-mobile-web-app-capable"]')?.content,
+      title: document.querySelector('meta[name="apple-mobile-web-app-title"]')?.content,
+      statusBar: document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')?.content,
+      display: manifest.display,
+    };
+  });
+  // Launches as its own app (no Safari bars) but NOT fullscreen: the status bar
+  // stays visible, and 'default' keeps the clock off the top of the picture.
+  check('launches as an app from the home screen, status bar intact',
+    iosMeta.capable === 'yes' && !!iosMeta.title &&
+    iosMeta.display === 'standalone' && iosMeta.statusBar === 'default',
+    JSON.stringify(iosMeta));
 
   await iosCtx.close();
 
